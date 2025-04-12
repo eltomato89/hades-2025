@@ -1,0 +1,8 @@
+- name: Homeserver Grundkonfiguration
+  hosts: hades
+  become: yes
+
+  roles:
+    - common
+    - nvidia-gpu
+    - microk8s

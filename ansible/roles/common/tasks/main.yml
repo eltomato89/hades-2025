@@ -1,0 +1,5 @@
+---
+- name: Installiere Updates (Debian/Ubuntu)
+  apt:
+    update_cache: yes
+    upgrade: dist

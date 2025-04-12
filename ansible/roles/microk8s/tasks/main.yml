@@ -1,0 +1,68 @@
+---
+- name: Install snapd (falls noch nicht installiert)
+  apt:
+    name: snapd
+    state: present
+    update_cache: yes
+
+- name: Stelle sicher, dass MicroK8s installiert ist
+  snap:
+    name: microk8s
+    classic: yes
+    state: present
+
+- name: Benutzer zur microk8s-Gruppe hinzufügen
+  user:
+    name: "{{ ansible_user }}"
+    groups: microk8s
+    append: yes
+
+- name: Warte kurz, damit Gruppenänderung greift
+  pause:
+    seconds: 5
+
+- name: Enable MicroK8s Add-ons (dns, metrics-server, prometheus)
+  command: microk8s enable dns:172.20.90.1 metrics-server prometheus
+  register: microk8s_enable_core
+  changed_when: "'Nothing to do for' not in microk8s_enable_core.stdout"
+  ignore_errors: yes
+
+- name: Enable MetalLB mit IP-Range
+  shell: |
+    echo -e "172.20.90.100-172.20.90.200" | microk8s enable metallb
+  args:
+    executable: /bin/bash
+  register: metallb_output
+  changed_when: "'Reconfiguring MetalLB' in metallb_output.stdout or 'enabled' in metallb_output.stdout"
+  ignore_errors: yes
+
+- name: Überspringe NVIDIA Setup, wenn keine GPU vorhanden ist
+  meta: end_play
+  when: gpu_check.stdout == ""
+
+- name: Installiere Abhängigkeiten
+  apt:
+    name:
+      - curl
+      - gnupg
+      - ca-certificates
+      - lsb-release
+      - build-essential
+      - nvidia-headless-570-server
+    state: present
+    update_cache: yes
+
+- name: Enable NVIDIA Add-on
+  command: microk8s enable nvidia
+  register: nvidia_output
+  changed_when: "'Nothing to do for' not in nvidia_output.stdout"
+  ignore_errors: yes
+
+- name: Exportiere Kubeconfig für MicroK8s
+  shell: microk8s config
+  register: kubeconfig_output
+  changed_when: false
+
+- name: Zeige Kubeconfig als Debug-Ausgabe
+  debug:
+    msg: "{{ kubeconfig_output.stdout }}"

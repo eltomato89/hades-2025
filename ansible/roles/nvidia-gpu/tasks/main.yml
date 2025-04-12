@@ -1,0 +1,85 @@
+---
+- name: Prüfe, ob eine NVIDIA GPU vorhanden ist
+  shell: lspci | grep -i nvidia
+  register: gpu_check
+  ignore_errors: true
+  changed_when: false
+
+- name: NVIDIA Docker Repo für Ubuntu 22.04 "faken"
+  shell: |
+    curl -s -L https://nvidia.github.io/nvidia-docker/ubuntu22.04/nvidia-docker.list | tee /etc/apt/sources.list.d/nvidia-docker.list
+  args:
+    executable: /bin/bash
+
+- name: Füge NVIDIA GPG Key hinzu
+  apt_key:
+    url: https://nvidia.github.io/nvidia-docker/gpgkey
+    state: present
+
+- name: apt update
+  apt:
+    update_cache: yes
+
+- name: Installiere NVIDIA Container Toolkit
+  apt:
+    name: nvidia-container-toolkit
+    state: present
+
+- name: Starte MicroK8s neu (inkl. containerd)
+  command: snap restart microk8s
+
+- name: Warte, bis MicroK8s bereit ist
+  shell: |
+    until microk8s status --wait-ready; do sleep 2; done
+  args:
+    executable: /bin/bash
+
+- name: Erstelle Test-Pod mit GPU-Limit
+  shell: |
+    microk8s kubectl apply -f - <<EOF
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: gpu-test
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: cuda-container
+          image: nvidia/cuda:12.8.1-base-ubuntu24.04
+          command: ["nvidia-smi"]
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+    EOF
+  args:
+    executable: /bin/bash
+
+- name: Warte, bis der GPU-Testpod im Status 'Completed' ist
+  shell: |
+    for i in {1..30}; do
+      STATUS=$(microk8s kubectl get pod gpu-test -o jsonpath='{.status.phase}')
+      echo "Aktueller Status: $STATUS"
+      if [ "$STATUS" = "Succeeded" ] || [ "$STATUS" = "Completed" ]; then
+        exit 0
+      fi
+      sleep 10
+    done
+    echo "Pod ist nicht erfolgreich beendet worden"
+    exit 1
+  args:
+    executable: /bin/bash
+  register: gpu_wait
+  failed_when: gpu_wait.rc != 0
+
+- name: Zeige Ergebnis von nvidia-smi aus Pod
+  shell: microk8s kubectl logs gpu-test
+  register: gpu_test_result
+  changed_when: false
+
+- name: Lösche Test-Pod
+  shell: microk8s kubectl delete pod gpu-test
+  ignore_errors: yes
+
+- name: Zeige Ausgabe von GPU-Test
+  debug:
+    msg: "{{ gpu_test_result.stdout }}"

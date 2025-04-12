@@ -1,0 +1,6 @@
+- name: MicroK8s auf hades installieren
+  hosts: hades
+  become: yes
+  roles:
+    - microk8s
+    
