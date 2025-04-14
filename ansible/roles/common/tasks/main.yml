@@ -1,5 +1,38 @@
 ---
+- name: Erlaube Benutzer 'jens' passwortlosen sudo-Zugriff
+  copy:
+    dest: /etc/sudoers.d/jens
+    content: "jens ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: '0440'
+  become: yes
+  become_user: root
+
 - name: Installiere Updates (Debian/Ubuntu)
   apt:
     update_cache: yes
     upgrade: dist
+
+- name: Prüfe, ob eine NVIDIA GPU vorhanden ist
+  shell: lspci | grep -i nvidia
+  register: gpu_check
+  ignore_errors: true
+  changed_when: false
+
+- name: Überspringe NVIDIA Setup, wenn keine GPU vorhanden ist
+  meta: end_play
+  when: gpu_check.stdout == ""
+
+- name: Installiere Abhängigkeiten
+  apt:
+    name:
+      - curl
+      - gnupg
+      - ca-certificates
+      - lsb-release
+      - build-essential
+      - nvidia-headless-570-server
+      - nvidia-utils-570-server
+    state: present
+    update_cache: yes

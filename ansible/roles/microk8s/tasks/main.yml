@@ -36,21 +36,15 @@
   changed_when: "'Reconfiguring MetalLB' in metallb_output.stdout or 'enabled' in metallb_output.stdout"
   ignore_errors: yes
 
+- name: Prüfe, ob eine NVIDIA GPU vorhanden ist
+  shell: lspci | grep -i nvidia
+  register: gpu_check
+  ignore_errors: true
+  changed_when: false
+  
 - name: Überspringe NVIDIA Setup, wenn keine GPU vorhanden ist
   meta: end_play
   when: gpu_check.stdout == ""
-
-- name: Installiere Abhängigkeiten
-  apt:
-    name:
-      - curl
-      - gnupg
-      - ca-certificates
-      - lsb-release
-      - build-essential
-      - nvidia-headless-570-server
-    state: present
-    update_cache: yes
 
 - name: Enable NVIDIA Add-on
   command: microk8s enable nvidia

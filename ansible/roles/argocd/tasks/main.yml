@@ -1,0 +1,12 @@
+---
+- name: Erstelle Namespace für ArgoCD
+  shell: |
+    microk8s kubectl create ns argocd
+  args:
+    executable: /bin/bash
+
+- name: Installiere ArgoCD
+  shell: |
+    microk8s kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+  args:
+    executable: /bin/bash
